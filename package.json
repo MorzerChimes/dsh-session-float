@@ -26,7 +26,8 @@
     "lib/index.js",
     "lib/client.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -61,5 +62,14 @@
     "react-dom": "^18.3.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "author": "Merlin Hermes <merlinhermes@qq.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MorzerChimes/dsh-session-float.git"
+  },
+  "homepage": "https://github.com/MorzerChimes/dsh-session-float#readme",
+  "bugs": {
+    "url": "https://github.com/MorzerChimes/dsh-session-float/issues"
   }
 }
