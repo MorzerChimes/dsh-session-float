@@ -33,7 +33,7 @@
 在设置中新增「无活动时隐藏」开关，默认关闭。
 ```
 
-提交身份：Merlin Hermes <merlinhermes@qq.com>。
+提交身份使用当前开发者本机的 git 配置，不要在命令中指定或修改 `user.name`、`user.email`。
 
 ## 文档位置
 
