@@ -582,9 +582,10 @@
   box-shadow: 0 1px 2px rgba(15, 17, 21, 0.08);
 }
 
+/* 预览与真实胶囊等宽，详细状态放不下两列，因此竖排 */
 .cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -635,28 +636,34 @@
   background: #ffffff;
 }
 
+/* 收纳态胶囊的静态复刻：尺寸与 .pill 一致，宽度随内容 */
 .preview {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 14px;
+  box-sizing: border-box;
   overflow: hidden;
   border: 0.5px solid var(--sf-border);
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--sf-bg);
-  font-size: 12px;
   white-space: nowrap;
 }
 
-.preview .badge {
-  transform: scale(0.82);
-  margin: 0 -2px;
+.preview[data-style='compact'] {
+  padding: 0 7px;
 }
 
-.preview .num,
-.preview b {
-  font-size: 12px;
+/* 岛内面板宽 380px，原尺寸的详细胶囊（英文约 352px）放不下，按比例缩小 */
+.form[data-variant='island'] .preview {
+  zoom: 0.85;
+}
+
+/* 预览不转圈，真实胶囊和会话列表中的进行中图标不受影响 */
+.preview .spin {
+  animation: none;
 }
 
 .switch {

@@ -1,5 +1,6 @@
 /** Island settings form, rendered both inside the island and on the Plugins page. */
 import { useSyncExternalStore } from 'react'
+import { STATUS_ORDER, type StatusKind } from './classify.ts'
 import type { CollapsedStyle, Appearance, PrefsStore } from './prefs.ts'
 import type { Translate } from './locales.ts'
 import { Badge, MoonIcon, StatusIcon, SunIcon, SystemIcon, ActivityDot } from './icons.tsx'
@@ -11,25 +12,40 @@ const APPEARANCES: readonly { id: Appearance; Icon: () => JSX.Element }[] = [
   { id: 'system', Icon: SystemIcon },
 ]
 
-function StylePreview({ style }: { style: CollapsedStyle }) {
-  if (style === 'compact') {
-    return (
-      <span className={css.preview} data-style="compact">
-        <Badge kind="total" count={4} />
-        <span className={css.divider} />
-        <Badge kind="pending" count={1} />
-        <Badge kind="completed" count={1} />
-        <Badge kind="running" count={2} />
-      </span>
-    )
-  }
+const PREVIEW_COUNTS: Readonly<Record<StatusKind, number>> = { pending: 1, completed: 1, running: 2 }
+const PREVIEW_TOTAL = 4
+
+/**
+ * 静态预览：结构与类名和 Island.tsx 的 Collapsed 保持一致（颜色依赖 .seg[data-kind]），
+ * 但不使用 Motion；进行中图标的旋转由 .preview .spin 关闭。
+ */
+function StylePreview({ style, t }: { style: CollapsedStyle; t: Translate }) {
+  const compact = style === 'compact'
   return (
-    <span className={css.preview} data-style="detailed">
-      <span className={css.seg} data-kind="total"><ActivityDot /><b>4</b></span>
-      <span className={css.divider} />
-      <span className={css.seg} data-kind="pending"><StatusIcon kind="pending" /><b>1</b></span>
-      <span className={css.seg} data-kind="completed"><StatusIcon kind="completed" /><b>1</b></span>
-      <span className={css.seg} data-kind="running"><StatusIcon kind="running" /><b>2</b></span>
+    <span className={css.preview} data-style={style} aria-hidden="true">
+      <span className={css.pillInner} data-style={style}>
+        <span className={css.seg} data-kind="total">
+          {compact ? <Badge kind="total" count={PREVIEW_TOTAL} /> : (
+            <>
+              <ActivityDot />
+              <span className={css.num}><b>{PREVIEW_TOTAL}</b></span>
+              <span className={css.segLabel}>{t('activity')}</span>
+            </>
+          )}
+        </span>
+        <span className={css.divider} />
+        {STATUS_ORDER.map((kind) => (
+          <span key={kind} className={css.seg} data-kind={kind}>
+            {compact ? <Badge kind={kind} count={PREVIEW_COUNTS[kind]} /> : (
+              <>
+                <StatusIcon kind={kind} />
+                <span className={css.num}><b>{PREVIEW_COUNTS[kind]}</b></span>
+                <span className={css.segLabel}>{t(`status.${kind}`)}</span>
+              </>
+            )}
+          </span>
+        ))}
+      </span>
     </span>
   )
 }
@@ -75,7 +91,7 @@ export function SettingsForm({ prefs, t, variant }: { prefs: PrefsStore; t: Tran
               className={css.card}
               onClick={() => prefs.update({ collapsedStyle: style })}
             >
-              <StylePreview style={style} />
+              <StylePreview style={style} t={t} />
               <span className={css.cardFoot}>
                 <span>{t(`settings.style.${style}`)}</span>
                 <span className={css.radio} aria-hidden="true" />
