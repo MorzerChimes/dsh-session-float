@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-float",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeepSeek Harness Web 活动会话灵动岛：浮动显示待处理 / 已完成 / 进行中的会话数量，展开查看详情并一键跳转",
   "keywords": [
     "dsh",

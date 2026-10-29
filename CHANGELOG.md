@@ -4,6 +4,8 @@
 
 ## [未发布]
 
+## [0.2.0] - 2026-10-30
+
 ### 新增
 
 - 设置项「仅在会话页中显示」：开启后在插件、自动化任务等页面中隐藏灵动岛，默认关闭。
@@ -33,5 +35,6 @@
 - 基于 Motion 的展开、收起、计数变化过渡动画，支持系统的「减少动态效果」设置。
 - 中文、英文界面文案。
 
-[未发布]: https://github.com/MorzerChimes/dsh-session-float/compare/v0.1.0...dev
+[未发布]: https://github.com/MorzerChimes/dsh-session-float/compare/v0.2.0...dev
+[0.2.0]: https://github.com/MorzerChimes/dsh-session-float/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MorzerChimes/dsh-session-float/releases/tag/v0.1.0

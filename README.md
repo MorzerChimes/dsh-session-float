@@ -36,7 +36,7 @@ dsh plugin --profile web add github:MorzerChimes/dsh-session-float
 安装指定版本：
 
 ```sh
-dsh plugin --profile web add github:MorzerChimes/dsh-session-float#v0.1.0
+dsh plugin --profile web add github:MorzerChimes/dsh-session-float#v0.2.0
 ```
 
 所有版本见 [Tags](https://github.com/MorzerChimes/dsh-session-float/tags)。安装后刷新 DSH 页面即可看到；如果没有出现，重启 `dsh web`。
@@ -68,6 +68,13 @@ dsh plugin --profile web remove dsh-session-float
 <img src="docs/images/settings.png" alt="设置页" width="420">
 
 ## 更新记录
+
+### v0.2.0（2026-10-30）
+
+- 展开面板新增「历史会话」分组，列出最近活动过、当前空闲的会话，点击即可回到该会话。
+- 新增设置项「仅在会话页中显示」，开启后在插件、自动化任务等页面中隐藏灵动岛。
+- 详细模式下，有进行中会话时「活动」圆点播放心跳动画。
+- 修复设置页收纳状态预览与真实胶囊不一致的问题；展开面板不再显示滚动条，滚动不受影响。
 
 ### v0.1.0（2026-10-29）
 
