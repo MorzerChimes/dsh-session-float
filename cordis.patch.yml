@@ -1,8 +1,8 @@
-# dsh-session-float bundle patch: inserts the Loader row whose browser half
-# renders the session island in shell.overlay.
+# dsh-session-float 组合包 patch：插入 session-float 这一行，
+# 它的浏览器半侧会在 shell.overlay 中渲染活动会话灵动岛。
 #
-# Install:  dsh plugin --profile web add dsh-session-float
-# Local:    dsh plugin --profile web add link:<absolute path of this directory>
+# 安装：    dsh plugin --profile web add github:MorzerChimes/dsh-session-float
+# 本地开发：dsh plugin --profile web add link:<本目录的绝对路径>
 - insert:
     - id: session-float
       name: dsh-session-float

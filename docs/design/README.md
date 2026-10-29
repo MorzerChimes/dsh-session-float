@@ -142,7 +142,7 @@ export function apply(ctx: Context) {
 
 ## 5. 交互设计
 
-效果图在 `docs/mockups/`，由 `gen.py` 生成 SVG，再用 `rsvg-convert` 导出 PNG。
+效果图在 `docs/design/mockups/`，由 `gen.py` 生成 SVG，再用 `rsvg-convert` 导出 PNG。
 
 | 文件 | 内容 |
 |---|---|

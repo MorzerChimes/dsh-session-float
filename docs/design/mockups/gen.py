@@ -1,14 +1,14 @@
-"""Generate the dsh-session-float design mockups.
+"""生成 dsh-session-float 的设计效果图。
 
-Usage: python3 gen.py && for f in *.svg; do rsvg-convert -z 1.5 "$f" -o "${f%.svg}.png"; done
-Colors follow docs/DESIGN.md §6 (island palettes) and the DSH --dsw-* tokens.
+用法：python3 gen.py && for f in *.svg; do rsvg-convert -z 1.5 "$f" -o "${f%.svg}.png"; done
+配色遵循 docs/design/README.md §6（灵动岛配色）与 DSH 的 --dsw-* 色板。
 """
 from pathlib import Path
 
 OUT = Path(__file__).parent
 FONT = "Noto Sans CJK SC, PingFang SC, sans-serif"
 
-# Island palettes (DESIGN.md §6.2). Dark is deliberately lighter than DSH dark (#151517 / #232324).
+# 灵动岛配色（docs/design/README.md §6.1）。深色有意比 DSH 深色（#151517 / #232324）亮一级。
 ISL = {
     "light": dict(bg="#FFFFFF", border="rgba(15,17,21,0.10)", fg="#0F1115", fg2="#61666B", fg3="#9A9EA4",
                   hover="#F2F3F5", current="#F6F7F9", divider="#ECEDF0", brand="#0F1115", brand_fg="#FFFFFF",

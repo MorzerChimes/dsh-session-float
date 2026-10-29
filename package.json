@@ -27,7 +27,8 @@
     "lib/client.js",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
