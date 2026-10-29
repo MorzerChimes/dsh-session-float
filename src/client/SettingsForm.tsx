@@ -120,6 +120,23 @@ export function SettingsForm({ prefs, t, variant }: { prefs: PrefsStore; t: Tran
 
       <section className={css.row}>
         <div className={css.fieldHead}>
+          <div className={css.fieldTitle} id={`sf-conversation-${variant}`}>{t('settings.conversationOnly')}</div>
+          <div className={css.fieldHint}>{t('settings.conversationOnly.hint')}</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={value.onlyInConversation}
+          aria-labelledby={`sf-conversation-${variant}`}
+          className={css.switch}
+          onClick={() => prefs.update({ onlyInConversation: !value.onlyInConversation })}
+        >
+          <span className={css.switchThumb} />
+        </button>
+      </section>
+
+      <section className={css.row}>
+        <div className={css.fieldHead}>
           <div className={css.fieldTitle}>{t('settings.position')}</div>
           <div className={css.fieldHint}>
             {t('settings.position.value', { corner: t(`corner.${value.position.corner}`), dx: value.position.dx, dy: value.position.dy })}

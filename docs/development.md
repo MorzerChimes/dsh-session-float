@@ -101,6 +101,8 @@ python3 -m http.server 8765 --bind 127.0.0.1
 | `settings` | `1` | 展开后进入设置页 |
 | `page` | `1` | 渲染插件页中的设置表单 |
 | `lang` | `zh` / `en` | 界面语言 |
+| `only` | `1` | 开启「仅在会话页中显示」 |
+| `panel` | `plugins` / `schedules` | 模拟当前停在全局页面；页面中可调用 `__setPanel(id)` 切换，`null` 为会话页 |
 
 `dev/cdp.mjs` 读取一个 JSON 步骤列表：
 
@@ -129,6 +131,7 @@ node dev/cdp.mjs steps.json
 | `useSessions` | ui-session | 会话列表 |
 | `useSessionStatus` | ui-session | 运行、待处理、未读完成状态 |
 | `useWorkspaces` | ui-workspace | Workspace 名称与归档集合 |
+| `usePanelInfo` | ui-layout | 当前主面板，判断是否在会话页 |
 | `ctx.uiWorkspace.openSession` | ui-workspace | 跳转到会话 |
 | `ctx.theme` / `theme/change` | ui-theme | 外观"系统"模式跟随 DSH |
 | `ctx.locale.register` | client-locale | 中英文文案 |

@@ -21,6 +21,7 @@ DSH Web GUI 的浮动"灵动岛"插件。收纳态显示活动会话统计，展
 | 活动总数使用 DSH 主题色 | 使用 DSH `brand-primary`（浅色下为黑色），不再用橙色 | §6.1 |
 | 点击时有充分的过渡动画 | 使用 Motion（React 动画库）的 layout 动画与弹簧 | §7 |
 | 点击空白处收起（可开关） | 默认开启；关闭后只能通过按钮、Esc 或点击会话收起 | §5.5 |
+| 仅在会话页中显示（可开关） | 默认关闭；开启后在插件、自动化任务等全局页面中隐藏 | §5.6 |
 
 ## 2. 插件形态
 
@@ -122,7 +123,7 @@ export function apply(ctx: Context) {
 | `useSessions` | ui-session | `ids`、`byId[id]`（`displayTitle`、`cwd`、`origin`、`blank`、`running`、`updatedAt`） |
 | `useSessionStatus` | ui-session | `Map<SessionId, { running, pendingInteraction, completionUnread }>` |
 | `useWorkspaces` | ui-workspace | 归档集合 `archivedSessionIds`、Workspace 名称 |
-| `usePanelInfo` | ui-layout | 判断当前是否在会话界面，用于标记"当前会话" |
+| `usePanelInfo` | ui-layout | `activePanelId` 为 null 时是会话界面；用于「仅在会话页中显示」 |
 
 待验证：`shell.overlay` 条目能收到这些全局 props，`inject` 返回的 `hooks` 会按 `useXxx` 绑定（类型声明和 ui-workspace、ui-schedule 的 overlay 条目都是这种用法）。
 
@@ -207,7 +208,15 @@ export function apply(ctx: Context) {
 - 从岛上开始的拖动、岛内的滚动和文字选择不会触发收起。
 - 关闭时，只有收起按钮、Esc、点击会话行这三种方式会收起。
 
-### 5.6 其他行为
+### 5.6 仅在会话页中显示
+
+- 设置项"仅在会话页中显示"，默认关闭。
+- 开启后，读取 ui-layout 的 `usePanelInfo`：`activePanelId` 为 `null` 表示主面板是会话页，灵动岛照常显示；为其他值（如 `plugins`、`schedules`）时不渲染灵动岛。
+- 隐藏时整个岛卸载，展开状态不保留；回到会话页后以收纳态重新出现，位置不变。
+- 拿不到 `usePanelInfo`（没有 ui-layout）时按会话页处理，始终显示。
+- 判断逻辑是 `prefs.ts` 中的纯函数 `isIslandVisible()`，有单元测试。
+
+### 5.7 其他行为
 
 - **新的待处理到达**：待处理段轻微放大一次（约 260ms）。不自动展开，不抢焦点。
 - **无障碍**：胶囊是 `button`，带 `aria-expanded`，`aria-label` 读出完整计数（简略模式同样读完整文字）；面板是 `role="dialog"`，会话行是按钮；计数变化通过 `aria-live="polite"` 播报；键盘可完成所有操作。
@@ -298,6 +307,7 @@ export function apply(ctx: Context) {
 | 外观 | 浅色 / 深色 / 系统 | 系统 | §6.1 |
 | 收纳状态 | 简略 / 详细，卡片内带实时预览 | 详细 | §5.1 |
 | 点击空白处收起 | 开关 | 开 | §5.5 |
+| 仅在会话页中显示 | 开关 | 关 | §5.6 |
 | 位置 | 显示当前锚定角和偏移，"恢复默认"按钮 | 左上角 16, 12 | §5.3 |
 
 所有设置立即生效，不需要保存按钮，和 DSH 自己的"外观"设置行为一致。插件管理页的配置页约定是"只有保存才写入"，那是针对 Host 配置表单的；这里的偏好只存在浏览器本地，即时预览更直观。
@@ -312,6 +322,7 @@ interface Prefs {
   appearance: 'light' | 'dark' | 'system'
   collapsedStyle: 'compact' | 'detailed'
   collapseOnOutsideClick: boolean
+  onlyInConversation: boolean
   position: { corner: 'tl' | 'tr' | 'bl' | 'br'; dx: number; dy: number }
 }
 ```

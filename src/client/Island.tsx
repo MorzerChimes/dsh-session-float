@@ -14,7 +14,7 @@ import {
   anchorStyle, clampPosition, DRAG_THRESHOLD, isBottom, isRight, panelBudget, positionFromRect, transformOrigin,
   type Position, type Size,
 } from './placement.ts'
-import type { PrefsStore } from './prefs.ts'
+import { isIslandVisible, type PrefsStore } from './prefs.ts'
 import type { ObservableValue, Scheme } from './theme.ts'
 import { relative, wrapT, type Translate } from './locales.ts'
 import { ActivityDot, Badge, ChevronIcon, GearIcon, StatusIcon } from './icons.tsx'
@@ -22,6 +22,11 @@ import { SettingsForm } from './SettingsForm.tsx'
 import css from './island.module.css'
 
 type SelectorHook<T> = <S>(selector: (value: T) => S, equal?: (a: S, b: S) => boolean) => S
+
+/** ui-layout `PanelInfo` 中本插件用到的部分。 */
+export interface PanelInfoLike {
+  readonly activePanelId: string | null
+}
 
 export interface IslandInjected {
   readonly openSession: (id: string) => void
@@ -33,6 +38,8 @@ export interface IslandProps extends IslandInjected {
   readonly useSessions?: SelectorHook<SessionListLike>
   readonly useSessionStatus?: SelectorHook<StatusMap>
   readonly useWorkspaces?: SelectorHook<WorkspacesLike>
+  /** ui-layout 的主面板选择；activePanelId 为 null 时显示的是会话页。 */
+  readonly usePanelInfo?: SelectorHook<PanelInfoLike>
   readonly t?: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -87,8 +94,17 @@ function ariaSummary(t: Translate, c: Classification): string {
  * always calls the same hooks in the same order.
  */
 export function Island(props: IslandProps) {
-  const presence = `${props.useSessions ? 1 : 0}${props.useSessionStatus ? 1 : 0}${props.useWorkspaces ? 1 : 0}`
-  return <IslandInner key={presence} {...props} />
+  const presence = `${props.useSessions ? 1 : 0}${props.useSessionStatus ? 1 : 0}${props.useWorkspaces ? 1 : 0}${props.usePanelInfo ? 1 : 0}`
+  return <IslandGate key={presence} {...props} />
+}
+
+/** 开启「仅在会话页中显示」时，在插件、自动化任务等全局页面中不渲染灵动岛。 */
+function IslandGate(props: IslandProps) {
+  const usePanelInfo = props.usePanelInfo ?? noHook<PanelInfoLike>({ activePanelId: null })
+  const activePanelId = usePanelInfo((info) => info.activePanelId)
+  const onlyInConversation = useSyncExternalStore(props.prefs.subscribe, () => props.prefs.getSnapshot().onlyInConversation)
+  if (!isIslandVisible({ onlyInConversation }, activePanelId)) return null
+  return <IslandInner {...props} />
 }
 
 function useElementSize(ref: { current: HTMLElement | null }, fallback: Size): Size {

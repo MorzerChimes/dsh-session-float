@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   anchorStyle, clampPosition, clampRect, cornerFor, panelBudget, positionFromRect, rectFromPosition, transformOrigin,
 } from '../src/client/placement.ts'
-import { DEFAULT_PREFS, STORAGE_KEY, createPrefsStore, parsePrefs, type StorageLike } from '../src/client/prefs.ts'
+import { DEFAULT_PREFS, STORAGE_KEY, createPrefsStore, isIslandVisible, parsePrefs, type StorageLike } from '../src/client/prefs.ts'
 import { createSchemeSource, resolveScheme } from '../src/client/theme.ts'
 
 const VIEW = { width: 1280, height: 800 }
@@ -55,7 +55,27 @@ describe('prefs', () => {
     expect(parsed.appearance).toBe('dark')
     expect(parsed.collapsedStyle).toBe('detailed')
     expect(parsed.collapseOnOutsideClick).toBe(true)
+    expect(parsed.onlyInConversation).toBe(false)
+    expect(parsePrefs(JSON.stringify({ onlyInConversation: 'yes' })).onlyInConversation).toBe(false)
+    expect(parsePrefs(JSON.stringify({ onlyInConversation: true })).onlyInConversation).toBe(true)
     expect(parsed.position).toEqual({ corner: 'br', dx: 16, dy: 40 })
+  })
+
+  it('hides the island outside conversations only when the switch is on', () => {
+    expect(isIslandVisible({ onlyInConversation: false }, 'plugins')).toBe(true)
+    expect(isIslandVisible({ onlyInConversation: true }, null)).toBe(true)
+    expect(isIslandVisible({ onlyInConversation: true }, undefined)).toBe(true)
+    expect(isIslandVisible({ onlyInConversation: true }, 'plugins')).toBe(false)
+    expect(isIslandVisible({ onlyInConversation: true }, 'schedules')).toBe(false)
+  })
+
+  it('notifies when onlyInConversation changes', () => {
+    const store = createPrefsStore(memoryStorage())
+    let calls = 0
+    store.subscribe(() => { calls += 1 })
+    store.update({ onlyInConversation: true })
+    expect(calls).toBe(1)
+    expect(store.getSnapshot().onlyInConversation).toBe(true)
   })
 
   it('persists updates, notifies once per real change, and resets', () => {

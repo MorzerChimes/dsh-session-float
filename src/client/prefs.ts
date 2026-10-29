@@ -13,6 +13,8 @@ export interface Prefs {
   readonly appearance: Appearance
   readonly collapsedStyle: CollapsedStyle
   readonly collapseOnOutsideClick: boolean
+  /** 只在会话页显示；插件、自动化任务等全局页面中隐藏。 */
+  readonly onlyInConversation: boolean
   readonly position: Position
 }
 
@@ -21,7 +23,16 @@ export const DEFAULT_PREFS: Prefs = {
   appearance: 'system',
   collapsedStyle: 'detailed',
   collapseOnOutsideClick: true,
+  onlyInConversation: false,
   position: DEFAULT_POSITION,
+}
+
+/**
+ * 灵动岛在当前主面板中是否可见。
+ * @param activePanelId - ui-layout 的 `panelInfo.activePanelId`；null 表示会话页，undefined 表示拿不到（按会话页处理）。
+ */
+export function isIslandVisible(prefs: Pick<Prefs, 'onlyInConversation'>, activePanelId: string | null | undefined): boolean {
+  return !prefs.onlyInConversation || activePanelId == null
 }
 
 export const STORAGE_KEY = 'dsh-session-float:prefs'
@@ -53,6 +64,7 @@ export function parsePrefs(raw: string | null): Prefs {
     appearance: v.appearance === 'light' || v.appearance === 'dark' || v.appearance === 'system' ? v.appearance : DEFAULT_PREFS.appearance,
     collapsedStyle: v.collapsedStyle === 'compact' || v.collapsedStyle === 'detailed' ? v.collapsedStyle : DEFAULT_PREFS.collapsedStyle,
     collapseOnOutsideClick: typeof v.collapseOnOutsideClick === 'boolean' ? v.collapseOnOutsideClick : DEFAULT_PREFS.collapseOnOutsideClick,
+    onlyInConversation: typeof v.onlyInConversation === 'boolean' ? v.onlyInConversation : DEFAULT_PREFS.onlyInConversation,
     position: {
       corner: isCorner(pos.corner) ? pos.corner : DEFAULT_POSITION.corner,
       dx: finiteOffset(pos.dx, DEFAULT_POSITION.dx),
@@ -63,7 +75,8 @@ export function parsePrefs(raw: string | null): Prefs {
 
 function samePrefs(a: Prefs, b: Prefs): boolean {
   return a.appearance === b.appearance && a.collapsedStyle === b.collapsedStyle
-    && a.collapseOnOutsideClick === b.collapseOnOutsideClick && samePosition(a.position, b.position)
+    && a.collapseOnOutsideClick === b.collapseOnOutsideClick && a.onlyInConversation === b.onlyInConversation
+    && samePosition(a.position, b.position)
 }
 
 export interface PrefsStore {

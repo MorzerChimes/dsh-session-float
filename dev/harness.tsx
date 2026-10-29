@@ -5,6 +5,7 @@
  *   ?scheme=light|dark  page theme      &appearance=light|dark|system
  *   &style=compact|detailed  &corner=tl|tr|bl|br  &counts=p,c,r
  *   &open=1 (click the pill)  &settings=1 (open settings)  &page=1 (render the Plugins-page form)
+ *   &only=1 (onlyInConversation)  &panel=plugins|schedules (mock active main panel)
  */
 import * as React from 'react'
 import * as jsx from 'react/jsx-runtime'
@@ -21,8 +22,18 @@ localStorage.setItem('dsh-session-float:prefs', JSON.stringify({
   appearance: q.get('appearance') ?? 'system',
   collapsedStyle: q.get('style') ?? 'detailed',
   collapseOnOutsideClick: true,
+  onlyInConversation: q.get('only') === '1',
   position: { corner, ...pos },
 }))
+
+// 模拟 ui-layout 的 panelInfo：?panel=plugins|schedules 表示停在全局页面；window.__setPanel(id) 切换
+let panelInfo = { activePanelId: q.get('panel') }
+const panelListeners = new Set<() => void>()
+;(window as any).__setPanel = (id: string | null) => { panelInfo = { activePanelId: id }; panelListeners.forEach((fn) => fn()) }
+const usePanelInfo = (sel: (x: typeof panelInfo) => unknown) => React.useSyncExternalStore(
+  (fn) => { panelListeners.add(fn); return () => { panelListeners.delete(fn) } },
+  () => sel(panelInfo),
+)
 
 const [p, c, r] = (q.get('counts') ?? '1,1,2').split(',').map(Number)
 const now = Date.now()
@@ -78,7 +89,7 @@ script.onload = () => {
   const config = registered['plugins.bundle.config']!
   const App = () => q.get('page') === '1'
     ? jsx.jsx('div', { className: 'pluginPage', children: [jsx.jsx('h2', { children: '活动会话灵动岛' }), jsx.jsx(config.Component, { ...config.options.inject(), view: 'page', t })] })
-    : jsx.jsx(overlay.Component, { ...overlay.options.inject(), useSessions: hook(list), useSessionStatus: hook(statuses), useWorkspaces: hook(workspaces), t })
+    : jsx.jsx(overlay.Component, { ...overlay.options.inject(), useSessions: hook(list), useSessionStatus: hook(statuses), useWorkspaces: hook(workspaces), usePanelInfo, t })
   createRoot(document.getElementById('overlay')!).render(jsx.jsx(App, {}))
   if (q.get('open') === '1') setTimeout(() => (document.querySelector('[aria-expanded]') as HTMLElement)?.click(), 200)
   if (q.get('settings') === '1') setTimeout(() => (document.querySelector('[aria-label="灵动岛设置"]') as HTMLElement)?.click(), 900)
