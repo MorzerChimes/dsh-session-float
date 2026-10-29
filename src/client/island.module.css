@@ -192,6 +192,40 @@
   to { transform: rotate(360deg); }
 }
 
+/*
+ * 活动圆点心跳：有进行中会话时，外圈的副本从原位扩散到 1.8 倍并淡出，
+ * 中心圆点同步轻跳一次。周期 2s，前 65% 扩散，其余时间静止，形成「跳一下、停一下」的节奏。
+ * 扩散到 1.8 倍约 23px，胶囊高 36px、左内边距 14px，不会被裁切。
+ */
+.icon[data-pulse] {
+  overflow: visible;
+}
+
+.activityRipple,
+.activityCore {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.activityRipple {
+  opacity: 0;
+  animation: sfRipple 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.icon[data-pulse] .activityCore {
+  animation: sfBeat 2s ease-out infinite;
+}
+
+@keyframes sfRipple {
+  0% { transform: scale(1); opacity: 0.45; stroke-width: 2; }
+  65%, 100% { transform: scale(1.8); opacity: 0; stroke-width: 1; }
+}
+
+@keyframes sfBeat {
+  0%, 24%, 100% { transform: scale(1); }
+  10% { transform: scale(1.14); }
+}
+
 /* compact badge: number centred in the status logo */
 .badge {
   position: relative;
@@ -750,5 +784,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spin { animation-duration: 3s; }
+  .activityRipple { display: none; }
+  .icon[data-pulse] .activityCore { animation: none; }
   .shell, .switchThumb, .rowArrow { transition: none; }
 }

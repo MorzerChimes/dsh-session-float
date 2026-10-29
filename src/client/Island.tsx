@@ -353,7 +353,7 @@ function Collapsed({ t, classification, style, layoutKey }: {
   return (
     <span className={css.pillInner} data-style={style}>
       <m.span layout="position" layoutDependency={layoutKey} className={css.seg} data-kind="total">
-        {compact ? <Badge kind="total" count={classification.total} /> : <ActivityDot />}
+        {compact ? <Badge kind="total" count={classification.total} /> : <ActivityDot pulse={classification.counts.running > 0} />}
         {!compact && <RollingNumber value={classification.total} />}
         {!compact && <span className={css.segLabel}>{t('activity')}</span>}
       </m.span>

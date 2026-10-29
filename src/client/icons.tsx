@@ -29,11 +29,16 @@ export function StatusIcon({ kind, size = 12 }: { kind: StatusKind; size?: numbe
   )
 }
 
-export function ActivityDot() {
+/**
+ * 活动圆点。pulse 为 true 时（有进行中的会话）外圈周期性向外扩散并淡出，
+ * 中心圆点同步轻跳一次，形成心跳感；动画为纯 CSS，见 island.module.css 的 sfRipple / sfBeat。
+ */
+export function ActivityDot({ pulse = false }: { pulse?: boolean }) {
   return (
-    <svg className={css.icon} width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg className={css.icon} data-pulse={pulse || undefined} width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      {pulse && <circle className={css.activityRipple} cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="2" />}
       <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeOpacity="0.22" strokeWidth="2" />
-      <circle cx="7" cy="7" r="3.2" fill="currentColor" />
+      <circle className={css.activityCore} cx="7" cy="7" r="3.2" fill="currentColor" />
     </svg>
   )
 }
