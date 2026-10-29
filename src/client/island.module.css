@@ -363,10 +363,15 @@
   color: var(--sf-fg);
 }
 
+/* 面板内容通常不长，滚动条会破坏岛的外观：隐藏滚动条，滚轮、触控板、键盘滚动照常可用 */
 .body {
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.body::-webkit-scrollbar {
+  display: none;
 }
 
 .list {
