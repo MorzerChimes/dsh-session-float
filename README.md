@@ -13,6 +13,22 @@ DeepSeek Harness Web 的活动会话"灵动岛"。收纳态显示活动会话总
 
 ## 安装
 
+安装最新发布版（`main` 分支）：
+
+```sh
+dsh plugin --profile web add github:MorzerChimes/dsh-session-float
+```
+
+安装指定版本（按版本标签，内容固定不变）：
+
+```sh
+dsh plugin --profile web add github:MorzerChimes/dsh-session-float#v0.1.0
+```
+
+所有版本见仓库的 [Tags](https://github.com/MorzerChimes/dsh-session-float/tags)。
+
+从本地源码安装（开发用）：
+
 ```sh
 npm install
 npm run build
@@ -53,6 +69,16 @@ npx esbuild dev/harness.tsx --bundle --format=iife --jsx=automatic --outfile=dev
 python3 -m http.server 8765 --bind 127.0.0.1
 # 打开 http://127.0.0.1:8765/dev/index.html?counts=1,1,2&open=1
 ```
+
+## 分支与版本
+
+| 名称 | 用途 |
+|---|---|
+| `main` | 最新发布版，默认安装来源 |
+| `vX.Y.Z` 标签 | 每次发布的固定版本，供安装指定版本 |
+| `release/vX.Y` 分支 | 该版本线的维护分支，用于在旧版本上发布补丁（如 `v0.1.1`） |
+
+发布流程：在开发分支完成修改，更新 `package.json` 的 `version`，运行 `npm run check` 后提交（`lib/client.js` 必须一起提交）；合并到 `main`，打 `vX.Y.Z` 标签，推送分支和标签。
 
 ## 已知限制
 
