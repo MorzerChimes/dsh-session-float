@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-session-float harness</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; }
+  body { background: #fff; color: #0f1115; }
+  body[data-ds-dark-theme] { background: #151517; color: #f9fafb; }
+  .frame { display: grid; grid-template-columns: 280px 1fr; height: 100%; }
+  .side { background: #f9fafb; border-right: 1px solid #ecedf0; padding: 64px 20px; font-size: 13px; color: #61666b; line-height: 2.2; }
+  body[data-ds-dark-theme] .side { background: #1b1b1c; border-color: #2c2c2e; color: #a1a4aa; }
+  .main { padding: 18px 32px; }
+  .main h1 { font-size: 15px; margin: 0 0 24px; }
+  .skel { height: 14px; border-radius: 4px; background: #ecedf0; margin: 14px 0; }
+  body[data-ds-dark-theme] .skel { background: #232324; }
+  .pluginPage { position: fixed; left: 300px; top: 40px; width: 600px; padding: 24px; border-radius: 16px; border: 1px solid #ecedf0; background: #fff; }
+  body[data-ds-dark-theme] .pluginPage { background: #1b1b1c; border-color: #2c2c2e; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="side">▾ dsh-session-float<br>&nbsp;&nbsp;重构登录模块<br>&nbsp;&nbsp;编写插件设计文档<br>▾ my-api<br>&nbsp;&nbsp;修复 CI 失败用例<br>&nbsp;&nbsp;接口限流方案</div>
+    <div class="main"><h1>编写插件设计文档</h1><div class="skel" style="width:70%"></div><div class="skel" style="width:62%"></div><div class="skel" style="width:66%"></div><div class="skel" style="width:40%"></div></div>
+  </div>
+  <div id="overlay"></div>
+  <script src="harness.js"></script>
+</body>
+</html>

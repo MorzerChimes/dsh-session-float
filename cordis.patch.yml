@@ -1,0 +1,8 @@
+# dsh-session-float bundle patch: inserts the Loader row whose browser half
+# renders the session island in shell.overlay.
+#
+# Install:  dsh plugin --profile web add dsh-session-float
+# Local:    dsh plugin --profile web add link:<absolute path of this directory>
+- insert:
+    - id: session-float
+      name: dsh-session-float
