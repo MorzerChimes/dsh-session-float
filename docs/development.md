@@ -103,6 +103,7 @@ python3 -m http.server 8765 --bind 127.0.0.1
 | `lang` | `zh` / `en` | 界面语言 |
 | `only` | `1` | 开启「仅在会话页中显示」 |
 | `panel` | `plugins` / `schedules` | 模拟当前停在全局页面；页面中可调用 `__setPanel(id)` 切换，`null` 为会话页 |
+| `history` | 数字 | 无活动状态的会话数，显示在「历史会话」中，默认 `8` |
 
 `dev/cdp.mjs` 读取一个 JSON 步骤列表：
 

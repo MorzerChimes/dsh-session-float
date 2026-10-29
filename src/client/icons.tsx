@@ -80,6 +80,16 @@ export function Badge({ kind, count }: { kind: StatusKind | 'total'; count: numb
   )
 }
 
+/** 历史会话行的图标：时钟，颜色跟随 currentColor。 */
+export function HistoryIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg className={css.icon} width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="5.6" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M7 4.2V7l1.9 1.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function GearIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">

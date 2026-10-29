@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { badgeLabel, classify, sameClassification, type SessionListLike, type SessionRow, type SessionStatusLike } from '../src/client/classify.ts'
+import {
+  badgeLabel, classify, historyOpenByDefault, HISTORY_LIMIT, nextHistoryCount, recentHistory, sameClassification, sameHistory,
+  type SessionListLike, type SessionRow, type SessionStatusLike,
+} from '../src/client/classify.ts'
 
 function row(id: string, extra: Partial<SessionRow> = {}): SessionRow {
   return { id, displayTitle: `title-${id}`, blank: false, running: false, updatedAt: 0, ...extra }
@@ -88,6 +91,71 @@ describe('classify', () => {
     expect(sameClassification(classify(l, new Map(), undefined), classify(l, new Map(), undefined))).toBe(true)
     const l2 = list([row('a', { running: true, displayTitle: 'renamed' })])
     expect(sameClassification(classify(l, new Map(), undefined), classify(l2, new Map(), undefined))).toBe(false)
+  })
+})
+
+describe('recentHistory', () => {
+  it('lists only inactive Sessions, newest first, and never overlaps the active groups', () => {
+    const l = list([
+      row('idle-old', { updatedAt: 1 }),
+      row('idle-new', { updatedAt: 9 }),
+      row('run', { running: true, updatedAt: 20 }),
+      row('done', { updatedAt: 30 }),
+      row('ask', { updatedAt: 40 }),
+    ])
+    const s = new Map([
+      ['done', status({ completionUnread: true })],
+      ['ask', status({ pendingInteraction: { kind: 'question' } })],
+    ])
+    expect(recentHistory(l, s, undefined).map((x) => x.id)).toEqual(['idle-new', 'idle-old'])
+    const active = classify(l, s, undefined).groups.flatMap((g) => g.sessions.map((x) => x.id))
+    expect(active).toEqual(['ask', 'done', 'run'])
+  })
+
+  it('treats a Session whose live status stopped running as history', () => {
+    const l = list([row('a', { running: true, updatedAt: 5 })])
+    expect(recentHistory(l, new Map([['a', status({ running: false })]]), undefined).map((x) => x.id)).toEqual(['a'])
+  })
+
+  it('excludes subagent, blank and archived Sessions', () => {
+    const l = list([row('sub', { origin: 'subagent' }), row('blank', { blank: true }), row('arch'), row('ok')])
+    expect(recentHistory(l, new Map(), { items: [], archivedSessionIds: ['arch'] }).map((x) => x.id)).toEqual(['ok'])
+  })
+
+  it('caps the list at the history limit', () => {
+    const rows = Array.from({ length: 20 }, (_, i) => row(`s${i}`, { updatedAt: i }))
+    const result = recentHistory(list(rows), new Map(), undefined)
+    expect(result).toHaveLength(HISTORY_LIMIT)
+    expect(result[0]?.id).toBe('s19')
+    expect(recentHistory(list(rows), new Map(), undefined, 3).map((x) => x.id)).toEqual(['s19', 's18', 's17'])
+  })
+
+  it('names the Workspace and marks the current Session', () => {
+    const l = list([row('a', { cwd: '/x/proj', retainedBy: { mainView: 1 } }), row('b')])
+    const [a, b] = recentHistory(l, new Map(), { items: [{ title: 'WS', sessionIds: ['b'] }], archivedSessionIds: [] })
+    expect(a).toMatchObject({ id: 'a', workspace: 'proj', current: true })
+    expect(b).toMatchObject({ id: 'b', workspace: 'WS', current: false })
+  })
+
+  it('handles an absent list and compares structurally', () => {
+    expect(recentHistory(undefined, undefined, undefined)).toEqual([])
+    const l = list([row('a')])
+    expect(sameHistory(recentHistory(l, new Map(), undefined), recentHistory(l, new Map(), undefined))).toBe(true)
+    expect(sameHistory(recentHistory(l, new Map(), undefined), recentHistory(list([row('a', { updatedAt: 1 })]), new Map(), undefined))).toBe(false)
+  })
+})
+
+describe('history paging', () => {
+  it('opens by default only when nothing is active', () => {
+    expect(historyOpenByDefault(0)).toBe(true)
+    expect(historyOpenByDefault(2)).toBe(false)
+  })
+
+  it('adds five at a time up to the available count and the limit', () => {
+    expect(nextHistoryCount(5, 15)).toBe(10)
+    expect(nextHistoryCount(10, 15)).toBe(15)
+    expect(nextHistoryCount(5, 7)).toBe(7)
+    expect(nextHistoryCount(15, 40)).toBe(15)
   })
 })
 

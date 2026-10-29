@@ -115,7 +115,9 @@
 .segOption:focus-visible,
 .card:focus-visible,
 .switch:focus-visible,
-.textButton:focus-visible {
+.textButton:focus-visible,
+.groupToggle:focus-visible,
+.moreButton:focus-visible {
   outline: 2px solid var(--sf-running);
   outline-offset: -2px;
 }
@@ -446,6 +448,8 @@
 .rowButton[data-kind='completed'] .rowIcon { color: var(--sf-completed); }
 .rowButton[data-kind='running'] .rowIcon { color: var(--sf-running); }
 
+.rowButton[data-kind='history'] .rowIcon { color: var(--sf-fg-3); }
+
 .rowIcon {
   display: inline-flex;
   align-self: flex-start;
@@ -524,6 +528,80 @@
   padding: 28px 20px 32px;
   color: var(--sf-fg-3);
   text-align: center;
+}
+
+/* 有历史会话时，「没有活动会话」只占一行，不再撑出大块留白 */
+.empty[data-compact] {
+  padding: 10px 12px 6px;
+  font-size: 12px;
+  text-align: left;
+}
+
+/* ---------- history ---------- */
+
+/* 历史会话的分组头同时是展开 / 收拢开关 */
+.groupToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0 8px 0 12px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.groupToggle:hover {
+  background: var(--sf-hover);
+}
+
+.group[data-kind='history'] .groupLabel { color: var(--sf-fg-2); }
+
+.groupChevron {
+  display: inline-flex;
+  color: var(--sf-fg-3);
+  flex: none;
+  transform: rotate(-90deg);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms ease;
+}
+
+.groupChevron[data-open] {
+  transform: none;
+}
+
+.groupToggle:hover .groupChevron {
+  color: var(--sf-fg);
+}
+
+.moreButton {
+  display: block;
+  width: 100%;
+  height: 32px;
+  margin: 0 0 2px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sf-running);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.moreButton:hover {
+  background: var(--sf-hover);
 }
 
 .hint {
@@ -786,5 +864,5 @@
   .spin { animation-duration: 3s; }
   .activityRipple { display: none; }
   .icon[data-pulse] .activityCore { animation: none; }
-  .shell, .switchThumb, .rowArrow { transition: none; }
+  .shell, .switchThumb, .rowArrow, .groupChevron { transition: none; }
 }

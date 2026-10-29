@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { AnimatePresence, LazyMotion, MotionConfig, domMax, m, useAnimationControls, type Transition } from 'motion/react'
 import {
   classify, sameClassification, STATUS_ORDER, EMPTY_CLASSIFICATION,
-  type ActiveSession, type Classification, type SessionListLike, type StatusKind, type StatusMap, type WorkspacesLike,
+  recentHistory, sameHistory, historyOpenByDefault, nextHistoryCount, HISTORY_PAGE,
+  type ActiveSession, type Classification, type HistorySession, type SessionListLike, type StatusKind, type StatusMap, type WorkspacesLike,
 } from './classify.ts'
 import {
   anchorStyle, clampPosition, DRAG_THRESHOLD, isBottom, isRight, panelBudget, positionFromRect, transformOrigin,
@@ -17,7 +18,7 @@ import {
 import { isIslandVisible, type PrefsStore } from './prefs.ts'
 import type { ObservableValue, Scheme } from './theme.ts'
 import { relative, wrapT, type Translate } from './locales.ts'
-import { ActivityDot, Badge, ChevronIcon, GearIcon, StatusIcon } from './icons.tsx'
+import { ActivityDot, Badge, ChevronIcon, GearIcon, HistoryIcon, StatusIcon } from './icons.tsx'
 import { SettingsForm } from './SettingsForm.tsx'
 import css from './island.module.css'
 
@@ -52,6 +53,7 @@ const COLLAPSED_SIZE: Size = { width: 120, height: 36 }
 const identity = <T,>(value: T) => value
 const noHook = <T,>(fallback: T): SelectorHook<T> => ((selector: (value: T) => unknown) => selector(fallback)) as SelectorHook<T>
 const EMPTY_STATUS: StatusMap = new Map()
+const EMPTY_HISTORY: readonly HistorySession[] = []
 
 function useViewport(): Size {
   const read = () => ({ width: window.innerWidth, height: window.innerHeight })
@@ -80,6 +82,19 @@ function useStableClassification(next: Classification): Classification {
   const ref = useRef(next)
   if (!sameClassification(ref.current, next)) ref.current = next
   return ref.current
+}
+
+/** 内容不变时沿用上一次的历史列表，避免无关的列表更新引起重渲染。 */
+function useStableHistory(next: readonly HistorySession[]): readonly HistorySession[] {
+  const ref = useRef(next)
+  if (!sameHistory(ref.current, next)) ref.current = next
+  return ref.current
+}
+
+/** 历史会话分组的展开状态与已显示条数，每次打开面板时重置。 */
+export interface HistoryView {
+  readonly open: boolean
+  readonly shown: number
 }
 
 function ariaSummary(t: Translate, c: Classification): string {
@@ -145,6 +160,12 @@ function IslandInner(props: IslandProps) {
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState<'list' | 'settings'>('list')
   const now = useNow(expanded)
+  // 历史会话只在面板展开时计算；它不参与收纳态的计数。
+  const history = useStableHistory(useMemo(
+    () => (expanded ? recentHistory(list, statuses, workspaces) : EMPTY_HISTORY),
+    [expanded, list, statuses, workspaces],
+  ))
+  const [historyView, setHistoryView] = useState<HistoryView>({ open: false, shown: HISTORY_PAGE })
   const rootRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const suppressClick = useRef(false)
@@ -240,16 +261,18 @@ function IslandInner(props: IslandProps) {
 
   const onPillClick = () => {
     if (suppressClick.current) return
+    // 有活动会话时历史会话默认收拢，没有时默认展开；以打开面板这一刻为准。
+    setHistoryView({ open: historyOpenByDefault(classification.total), shown: HISTORY_PAGE })
     setExpanded(true)
   }
 
-  const open = (session: ActiveSession) => {
+  const open = (session: { readonly id: string }) => {
     openSession(session.id)
     collapse()
   }
 
   // Layout animations run only when this key changes, so dragging never animates.
-  const layoutKey = `${expanded}|${view}|${pref.collapsedStyle}|${classification.counts.pending}|${classification.counts.completed}|${classification.counts.running}`
+  const layoutKey = `${expanded}|${view}|${pref.collapsedStyle}|${classification.counts.pending}|${classification.counts.completed}|${classification.counts.running}|${historyView.open}|${historyView.shown}`
 
   return (
     <MotionConfig reducedMotion="user" transition={SPRING}>
@@ -291,6 +314,9 @@ function IslandInner(props: IslandProps) {
                     view={view}
                     setView={setView}
                     classification={classification}
+                    history={history}
+                    historyView={historyView}
+                    onHistoryView={setHistoryView}
                     now={now}
                     prefs={prefs}
                     maxHeight={budget.height}
@@ -412,11 +438,14 @@ function Panel(props: {
   view: 'list' | 'settings'
   setView: (view: 'list' | 'settings') => void
   classification: Classification
+  history: readonly HistorySession[]
+  historyView: HistoryView
+  onHistoryView: (view: HistoryView) => void
   now: number
   prefs: PrefsStore
   maxHeight: number
   layoutKey: string
-  onOpen: (session: ActiveSession) => void
+  onOpen: (session: { readonly id: string }) => void
   onCollapse: () => void
   onDragStart: (event: ReactPointerEvent<HTMLElement>) => void
 }) {
@@ -483,13 +512,16 @@ function detailOf(t: Translate, session: ActiveSession): string {
   return parts.join(' · ')
 }
 
-function SessionList({ t, classification, now, onOpen }: {
+function SessionList({ t, classification, history, historyView, onHistoryView, now, onOpen }: {
   t: Translate
   classification: Classification
+  history: readonly HistorySession[]
+  historyView: HistoryView
+  onHistoryView: (view: HistoryView) => void
   now: number
-  onOpen: (session: ActiveSession) => void
+  onOpen: (session: { readonly id: string }) => void
 }) {
-  if (classification.total === 0) {
+  if (classification.total === 0 && history.length === 0) {
     return <div className={css.empty}>{t('empty')}</div>
   }
   return (
@@ -499,6 +531,9 @@ function SessionList({ t, classification, now, onOpen }: {
       animate="show"
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.03, delayChildren: 0.12 } } }}
     >
+      {classification.total === 0 && (
+        <m.div variants={ROW_VARIANTS} className={css.empty} data-compact="">{t('empty')}</m.div>
+      )}
       {classification.groups.map((group) => (
         <section key={group.kind} className={css.group} data-kind={group.kind}>
           <m.div variants={ROW_VARIANTS} className={css.groupHead}>
@@ -536,7 +571,88 @@ function SessionList({ t, classification, now, onOpen }: {
           ))}
         </section>
       ))}
+      {history.length > 0 && (
+        <HistorySection t={t} history={history} view={historyView} onView={onHistoryView} now={now} onOpen={onOpen} />
+      )}
       <div className={css.hint}>{t('hint')}</div>
     </m.div>
+  )
+}
+
+/**
+ * 历史会话：最近活动过、当前没有活动状态的会话。分组头是展开 / 收拢开关；
+ * 展开后先显示 5 个，「查看更多」每次再加 5 个，最多 15 个。
+ */
+function HistorySection({ t, history, view, onView, now, onOpen }: {
+  t: Translate
+  history: readonly HistorySession[]
+  view: HistoryView
+  onView: (view: HistoryView) => void
+  now: number
+  onOpen: (session: { readonly id: string }) => void
+}) {
+  const shown = history.slice(0, view.shown)
+  const more = nextHistoryCount(view.shown, history.length) > shown.length
+  const listId = 'sf-history-list'
+  return (
+    <section className={css.group} data-kind="history">
+      <m.button
+        type="button"
+        variants={ROW_VARIANTS}
+        className={css.groupToggle}
+        aria-expanded={view.open}
+        aria-controls={listId}
+        onClick={() => onView({ open: !view.open, shown: view.shown })}
+      >
+        <span className={css.groupLabel}>{t('history.title')}</span>
+        <span className={css.groupRule} />
+        <span className={css.groupChevron} data-open={view.open || undefined}><ChevronIcon dir="down" /></span>
+      </m.button>
+      {view.open && (
+        <m.div
+          id={listId}
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.025 } } }}
+        >
+          {shown.map((session) => (
+            <m.button
+              key={session.id}
+              type="button"
+              variants={ROW_VARIANTS}
+              className={css.rowButton}
+              data-current={session.current || undefined}
+              data-kind="history"
+              aria-label={t('aria.open', { title: session.title })}
+              onClick={() => onOpen(session)}
+            >
+              <span className={css.rowIcon}><HistoryIcon size={14} /></span>
+              <span className={css.rowText}>
+                <span className={css.rowTitle}>{session.title}</span>
+                {(session.workspace !== undefined || session.current) && (
+                  <span className={css.rowMeta}>
+                    {session.workspace !== undefined && <span className={css.rowWorkspace}>{session.workspace}</span>}
+                    {session.workspace !== undefined && session.current && <span className={css.rowSep} aria-hidden="true">·</span>}
+                    {session.current && <span className={css.rowDetail}>{t('detail.current')}</span>}
+                  </span>
+                )}
+              </span>
+              <span className={css.rowTime}>{relative(t, session.updatedAt, now)}</span>
+              <span className={css.rowArrow}><ChevronIcon dir="right" /></span>
+            </m.button>
+          ))}
+          {more && (
+            <m.button
+              type="button"
+              variants={ROW_VARIANTS}
+              className={css.moreButton}
+              onClick={() => onView({ open: true, shown: nextHistoryCount(view.shown, history.length) })}
+            >
+              {t('history.more')}
+            </m.button>
+          )}
+        </m.div>
+      )}
+    </section>
   )
 }

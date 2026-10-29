@@ -6,6 +6,7 @@
  *   &style=compact|detailed  &corner=tl|tr|bl|br  &counts=p,c,r
  *   &open=1 (click the pill)  &settings=1 (open settings)  &page=1 (render the Plugins-page form)
  *   &only=1 (onlyInConversation)  &panel=plugins|schedules (mock active main panel)
+ *   &history=N (idle Sessions shown under 历史会话, default 8)
  */
 import * as React from 'react'
 import * as jsx from 'react/jsx-runtime'
@@ -49,7 +50,12 @@ const add = (kind: string, i: number) => {
 for (let i = 0; i < (p ?? 0); i++) add('pending', i)
 for (let i = 0; i < (c ?? 0); i++) add('completed', i)
 for (let i = 0; i < (r ?? 0); i++) add('running', i)
-rows.push({ id: 'idle', displayTitle: 'idle', blank: false, running: false, updatedAt: 0 })
+// 无活动状态的会话，进入「历史会话」；?history=N 控制数量，默认 8
+const idleTitles = ['调研向量检索方案', '整理周报', '升级依赖版本', '排查内存泄漏', '优化首页加载', '设计权限模型', '梳理埋点需求', '重写配置解析', '评审 PR #42', '补全 API 文档']
+const historyCount = Number(q.get('history') ?? 8)
+for (let i = 0; i < historyCount; i++) {
+  rows.push({ id: `h${i}`, displayTitle: idleTitles[i % idleTitles.length] + (i >= idleTitles.length ? ` ${i}` : ''), cwd: ['/home/u/dsh-session-float', '/home/u/my-api', '/srv/data-pipeline'][i % 3], blank: false, running: false, updatedAt: now - (i * 47 + 30) * 60_000, retainedBy: i === 0 && q.get('currentIdle') === '1' ? { mainView: 1 } : {} })
+}
 const list = { ids: rows.map((x) => x.id), byId: Object.fromEntries(rows.map((x) => [x.id, x])), projectionsBySession: {} }
 const workspaces = { items: [{ title: 'dsh-session-float', sessionIds: ['s0', 's3'] }], archivedSessionIds: [] }
 const hook = (v: unknown) => (sel: (x: unknown) => unknown) => sel(v)
