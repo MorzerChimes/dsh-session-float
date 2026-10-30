@@ -112,6 +112,8 @@
 .pill:focus-visible,
 .iconButton:focus-visible,
 .rowButton:focus-visible,
+.rowToggle:focus-visible,
+.subRow:focus-visible,
 .segOption:focus-visible,
 .card:focus-visible,
 .switch:focus-visible,
@@ -410,6 +412,11 @@
   background: var(--sf-divider);
 }
 
+/* 活动会话行：跳转按钮，加上可选的子智能体展开按钮和子智能体列表 */
+.sessionRow {
+  position: relative;
+}
+
 .rowButton {
   position: relative;
   display: flex;
@@ -432,6 +439,11 @@
 
 .rowButton:hover {
   background: var(--sf-hover);
+}
+
+/* 展开按钮叠放在副标题行的右端（时间下方），副标题为它让出位置 */
+.rowButton[data-toggle] .rowMeta {
+  padding-right: 28px;
 }
 
 .rowButton[data-current] {
@@ -501,6 +513,26 @@
   flex: none;
 }
 
+/* 子智能体徽标：蓝色图标 + 数量，不参与省略 */
+.subBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--sf-running);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * 行盒中线比数字的视觉中线高约 0.04em（字体上伸部比下伸部高），只按行盒居中时图标整体偏上。
+ * 下移 0.06em，让图标墨迹的上下边分别比数字高出、低出同样的量（11.5px 时各约 0.8px）。
+ */
+.subBadge .icon {
+  position: relative;
+  top: 0.06em;
+}
+
 .rowDetail {
   flex: 0 1 auto;
   min-width: 0;
@@ -517,16 +549,128 @@
   flex: none;
 }
 
-.rowArrow {
+.rowToggle {
+  position: absolute;
+  top: 27px;
+  right: 6px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--sf-fg-3);
-  flex: none;
-  transition: color 120ms ease, transform 120ms ease;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
-.rowButton:hover .rowArrow {
+.rowToggle:hover {
+  background: var(--sf-chip);
   color: var(--sf-fg);
-  transform: translateX(2px);
+}
+
+/* 收起时朝右，展开时朝下，与历史会话分组头一致 */
+.rowToggleChevron {
+  display: inline-flex;
+  transform: rotate(-90deg);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rowToggleChevron[data-open] {
+  transform: none;
+}
+
+/* ---------- running subagents ---------- */
+
+/* 缩进到父会话标题的位置，左侧竖线表示从属关系 */
+.subList {
+  position: relative;
+  margin: -2px 0 4px 38px;
+  overflow: hidden;
+}
+
+.subList::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 4px;
+  bottom: 10px;
+  width: 1px;
+  background: var(--sf-divider);
+}
+
+.subRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0 0 2px;
+  padding: 5px 10px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.subRow:hover {
+  background: var(--sf-hover);
+}
+
+.subIcon {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 3px;
+  color: var(--sf-running);
+  flex: none;
+}
+
+.subName {
+  overflow: hidden;
+  color: var(--sf-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.subMeta {
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--sf-fg-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.subTask {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subTokens {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.subTime {
+  align-self: flex-start;
+  margin-top: 1px;
+  color: var(--sf-fg-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
 }
 
 .empty {
@@ -869,5 +1013,5 @@
   .spin { animation-duration: 3s; }
   .activityRipple { display: none; }
   .icon[data-pulse] .activityCore { animation: none; }
-  .shell, .switchThumb, .rowArrow, .groupChevron { transition: none; }
+  .shell, .switchThumb, .rowToggleChevron, .groupChevron { transition: none; }
 }

@@ -13,8 +13,15 @@ export const zh = {
   'pending.question': '等待回答',
   'pending.other': '等待处理',
   'detail.completed': '已完成，未查看',
-  'detail.running': '运行中',
-  'detail.subagents': '{n} 个子代理',
+  'subagent.running': '{n} 个子智能体运行中',
+  'subagent.expand': '展开 {n} 个运行中的子智能体',
+  'subagent.collapse': '收起子智能体',
+  'subagent.list': '{title} 的子智能体',
+  'aria.openSubagent': '打开子智能体 {name}',
+  'duration.seconds': '{s} 秒',
+  'duration.minutes': '{m} 分 {s} 秒',
+  'duration.hours': '{h} 小时 {m} 分',
+  'tokens.value': '{value} tok',
   'detail.current': '当前会话',
   'time.now': '刚刚',
   'time.minutes': '{n} 分钟前',
@@ -69,8 +76,15 @@ export const en: Record<SessionFloatKey, string> = {
   'pending.question': 'Awaiting answer',
   'pending.other': 'Needs attention',
   'detail.completed': 'Finished, not viewed',
-  'detail.running': 'Running',
-  'detail.subagents': '{n} subagents',
+  'subagent.running': '{n} subagents running',
+  'subagent.expand': 'Show {n} running subagents',
+  'subagent.collapse': 'Hide subagents',
+  'subagent.list': 'Subagents of {title}',
+  'aria.openSubagent': 'Open subagent {name}',
+  'duration.seconds': '{s}s',
+  'duration.minutes': '{m}m {s}s',
+  'duration.hours': '{h}h {m}m',
+  'tokens.value': '{value} tok',
   'detail.current': 'Current session',
   'time.now': 'now',
   'time.minutes': '{n}m ago',
@@ -137,4 +151,21 @@ export function relative(t: Translate, then: number, now: number): string {
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return t('time.hours', { n: hours })
   return t('time.days', { n: Math.floor(hours / 24) })
+}
+
+/** 子智能体运行时长：不足 1 分钟显示秒，不足 1 小时显示分秒，更长显示时分。 */
+export function formatDuration(t: Translate, ms: number): string {
+  const total = Math.floor(Math.max(0, ms) / 1000)
+  const s = total % 60
+  const minutes = Math.floor(total / 60)
+  if (minutes < 1) return t('duration.seconds', { s })
+  if (minutes < 60) return t('duration.minutes', { m: minutes, s })
+  return t('duration.hours', { h: Math.floor(minutes / 60), m: minutes % 60 })
+}
+
+/** token 数的紧凑写法，与 DSH 子智能体菜单一致：999、12.3K、1.2M；三位整数以上不保留小数。 */
+export function formatTokens(t: Translate, n: number): string {
+  const scaled = (x: number) => (x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10))
+  const value = n < 1000 ? String(n) : n < 1_000_000 ? `${scaled(n / 1000)}K` : `${scaled(n / 1_000_000)}M`
+  return t('tokens.value', { value })
 }

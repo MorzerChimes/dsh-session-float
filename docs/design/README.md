@@ -121,7 +121,7 @@ export function apply(ctx: Context) {
 
 | Hook | 提供方 | 用途 |
 |---|---|---|
-| `useSessions` | ui-session | `ids`、`byId[id]`（`displayTitle`、`cwd`、`origin`、`blank`、`running`、`updatedAt`） |
+| `useSessions` | ui-session | `ids`、`byId[id]`（`displayTitle`、`cwd`、`origin`、`blank`、`running`、`updatedAt`、`projectionValues`）、`projectionsBySession` |
 | `useSessionStatus` | ui-session | `Map<SessionId, { running, pendingInteraction, completionUnread }>` |
 | `useWorkspaces` | ui-workspace | 归档集合 `archivedSessionIds`、Workspace 名称 |
 | `usePanelInfo` | ui-layout | `activePanelId` 为 null 时是会话界面；用于「仅在会话页中显示」 |
@@ -130,11 +130,15 @@ export function apply(ctx: Context) {
 
 ## 4. 会话归类规则
 
-规则与侧边栏 ui-workspace 的状态点一致，保证两处显示不矛盾。每个会话只归入一组，按优先级判断：
+规则与侧边栏 ui-workspace 的状态点（`sessionStatuses`）一致，保证两处显示不矛盾。每个会话只归入一组，按优先级判断：
 
 1. **待处理**：`status.pendingInteraction !== undefined`，即审批、计划待审或提问。副标题显示类型（"等待审批""计划待审""等待回答"）。
-2. **已完成**：`status.completionUnread === true`，即运行结束且用户还没打开查看。
-3. **进行中**：`(status.running ?? summary.running) === true`。副标题附加运行中的子代理数（来自 `projectionsBySession[id].values.subagentCatalog`）。
+2. **进行中**：会话自身在运行，`(status.running ?? summary.running) === true`；或者自身本轮已结束，但还有正在运行的直接子智能体。副标题不写「运行中」，分组和转圈图标已经表达了这个状态。
+3. **已完成**：`status.completionUnread === true`，即运行结束且用户还没打开查看。只有在会话自身和所有子智能体都停止后才会归入这一组。
+
+> 0.2.0 及之前的顺序是「待处理 → 已完成 → 进行中」，并且不考虑子智能体。主会话本轮结束、子智能体还在运行时，`completionUnread` 已经为 true，灵动岛显示「已完成」，侧边栏却显示「进行中」。现在改为与侧边栏相同的顺序。
+
+任何一组的会话，只要有正在运行的直接子智能体，副标题都会附加一个蓝色徽标：智能体图标加数量（`🤖 3` 的样子），悬停提示和读屏文字是「3 个子智能体运行中」，与侧边栏文案一致；行上同时出现展开按钮（§5.2.1）。副标题各项按「Workspace · 状态说明 · 子智能体徽标 · 当前会话」排列，缺的项连同分隔点一起省略。子智能体来自 `projectionsBySession[id].values.subagentCatalog`，运行判断与侧边栏相同：`statuses.get(childId)?.running ?? byId[childId]?.running`；外部执行（`mode: 'external'`）在本地没有会话，不计入。
 
 不计入：`origin === 'subagent'` 的会话（侧边栏也隐藏它们）、已归档会话、空白会话（`blank`）。
 
@@ -183,11 +187,30 @@ export function apply(ctx: Context) {
 面板宽 380px，最大高度受可用空间限制（§5.5），超出后内部滚动；不显示滚动条，滚轮、触控板和键盘滚动照常可用。
 
 - 头部：拖动把手、标题"活动会话"和总数、设置按钮（齿轮）、收起按钮。
-- 列表：按 §4 的分组顺序显示，空组不显示。每行有状态图标、标题、Workspace 名与状态说明、相对时间；当前打开的会话带竖条标记。
+- 列表：按 §4 的分组顺序显示，空组不显示。每行有状态图标、标题、Workspace 名与状态说明、相对时间；当前打开的会话带竖条标记。行尾不再显示跳转箭头。
 - 点击行：调用 `openSession(id)`，然后收起。
 - 活动分组之后是历史会话（§5.3）。
 - 齿轮切换到岛内设置页（§8.1），返回箭头回到列表。两页之间横向滑动切换，面板高度同步过渡。
 - Esc 始终可以收起；点击空白处是否收起由设置决定（§5.6）。
+
+### 5.2.1 运行中的子智能体
+
+有正在运行的子智能体的会话行，在副标题右端（相对时间下方）显示一个展开按钮，收起时箭头朝右，展开时朝下，带 `aria-expanded`。没有运行中子智能体的行不显示这个按钮。
+
+- **结构**：跳转按钮和展开按钮是并列的两个按钮（按钮不能嵌套），展开按钮叠放在行的右端；点击行的其他位置仍然跳转会话。
+- **列表**：展开后在行下方缩进列出，左侧一条竖线表示从属关系，按 `subagentCatalog` 的创建顺序排列。只列出正在运行的子智能体。
+- **每一项**：
+  - 名称：创建时的标签（`label`），没有时用子会话标题。
+  - 任务：子会话自己的标题（`projectionValues.title`），与名称相同或还没有标题时不显示。显示不下时用省略号截断，悬停显示全文；名称同样如此。
+  - 子智能体不走 LLM 标题生成，标题是 DSH 从首条提示截出来的兜底标题（默认组合：前 5 个词、不超过 40 个 UTF-8 字节），截断时不加省略号，例如「这是一个插件测试任务，请尽」。`markClipped()` 在标题达到这两个上限之一时补上「…」。客户端拿不到原始提示，恰好 5 个词或接近 40 字节的完整标题也会被补上省略号，这是已知的误判。
+  - token：`projectionValues.tokenUsage` 四个用量桶之和，写法与 DSH 子智能体菜单一致（`11.3K tok`）。
+  - 运行时长：`subagentTiming.settledMs` 加上当前轮次从 `active.since` 到现在的时长，每秒刷新；计时器只在列表展开时存在。
+  - token 和时长来自子会话的投影，客户端还没有拿到时不显示。
+- **点击子智能体**：调用 `openSession(子会话 id)`，与 DSH 子智能体菜单的跳转相同，然后收起。
+- **状态**：展开状态按会话 id 记录，每次打开面板时全部收起。子智能体全部结束后按钮消失，列表随之收起。
+- **限制**：只显示直接子智能体；孙智能体需要先加载子会话的投影，插件拿不到这个接口。
+
+相关纯函数：`runningSubagentsOf()`、`subagentElapsed()`、`markClipped()`（`classify.ts`），`formatDuration()`、`formatTokens()`（`locales.ts`）。
 
 ### 5.3 历史会话
 
@@ -196,7 +219,7 @@ export function apply(ctx: Context) {
 - **分组头是开关**：整行可点击，右侧箭头收拢时朝右、展开时朝下；带 `aria-expanded`。
 - **默认状态**：每次打开面板时决定一次。有活动会话时默认收拢，避免挤占待处理等需要关注的内容；没有活动会话时默认展开。面板打开期间活动数量变化不会自动改变展开状态，以免列表在用户眼前跳动。
 - **分页**：展开后显示 5 个；还有更多时末尾显示"查看更多"，每次再加 5 个，最多 15 个，加满或没有更多时按钮消失。收起面板后重置为 5 个。
-- **行**：时钟图标、标题、Workspace 名、相对时间；当前打开的会话同样带竖条标记，并在副标题显示"当前会话"。点击行调用 `openSession(id)` 后收起，与活动会话行一致。
+- **行**：时钟图标、标题、Workspace 名、相对时间，没有行尾箭头；当前打开的会话同样带竖条标记，并在副标题显示"当前会话"。点击行调用 `openSession(id)` 后收起，与活动会话行一致。
 - **空状态**：没有活动会话但有历史会话时，顶部显示一行小字"没有活动会话"，下方直接是展开的历史会话；两者都没有时显示原来的居中空状态。
 
 ### 5.4 拖动与位置
@@ -372,7 +395,7 @@ interface Prefs {
 
 1. **默认位置与侧边栏重叠**：页面左上角正好是侧边栏的品牌行（见 [01-collapsed.png](mockups/01-collapsed.png)）。可选方案：(a) 保持页面左上角，用户自行拖开；(b) 默认放在主区域左上角，即 `x = 侧边栏宽度 + 16`；(c) 默认顶部居中。
 2. **"已完成"的口径**：采用 §4 的"完成后未查看"，还是改为"最近 N 分钟内完成"？后者需要插件自己记录完成时间。
-3. **子代理会话**：目前不计入统计，只在父会话行显示子代理运行数。
+3. **子智能体会话**：不计入统计，只在父会话行显示运行数，并可展开查看详情（§5.2.1）。
 4. **设置的存储范围**：目前按浏览器保存（§8.2）。是否需要跨浏览器、跨设备同步？
 5. **总数为 0 时**：目前显示淡化的 `0 活动`。是否需要再加一个"无活动时隐藏"的设置项？
 

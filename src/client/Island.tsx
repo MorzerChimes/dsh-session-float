@@ -4,12 +4,12 @@
  * settings). Motion drives the layout morph; dragging bypasses React renders
  * and commits a corner-anchored position on release.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { AnimatePresence, LazyMotion, MotionConfig, domMax, m, useAnimationControls, type Transition } from 'motion/react'
 import {
   classify, sameClassification, STATUS_ORDER, EMPTY_CLASSIFICATION,
-  recentHistory, sameHistory, historyOpenByDefault, nextHistoryCount, HISTORY_PAGE,
-  type ActiveSession, type Classification, type HistorySession, type SessionListLike, type StatusKind, type StatusMap, type WorkspacesLike,
+  recentHistory, sameHistory, historyOpenByDefault, nextHistoryCount, HISTORY_PAGE, subagentElapsed,
+  type ActiveSession, type Classification, type HistorySession, type RunningSubagent, type SessionListLike, type StatusKind, type StatusMap, type WorkspacesLike,
 } from './classify.ts'
 import {
   anchorStyle, clampPosition, DRAG_THRESHOLD, isBottom, isRight, panelBudget, positionFromRect, transformOrigin,
@@ -17,8 +17,8 @@ import {
 } from './placement.ts'
 import { isIslandVisible, type PrefsStore } from './prefs.ts'
 import type { ObservableValue, Scheme } from './theme.ts'
-import { relative, wrapT, type Translate } from './locales.ts'
-import { ActivityDot, Badge, ChevronIcon, GearIcon, HistoryIcon, StatusIcon } from './icons.tsx'
+import { formatDuration, formatTokens, relative, wrapT, type Translate } from './locales.ts'
+import { ActivityDot, AgentIcon, Badge, ChevronIcon, GearIcon, HistoryIcon, StatusIcon } from './icons.tsx'
 import { SettingsForm } from './SettingsForm.tsx'
 import css from './island.module.css'
 
@@ -66,14 +66,14 @@ function useViewport(): Size {
   return size
 }
 
-function useNow(active: boolean): number {
+function useNow(active: boolean, interval = 30_000): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!active) return
     setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    const timer = window.setInterval(() => setNow(Date.now()), interval)
     return () => window.clearInterval(timer)
-  }, [active])
+  }, [active, interval])
   return now
 }
 
@@ -166,6 +166,16 @@ function IslandInner(props: IslandProps) {
     [expanded, list, statuses, workspaces],
   ))
   const [historyView, setHistoryView] = useState<HistoryView>({ open: false, shown: HISTORY_PAGE })
+  // 展开了子智能体列表的父会话；每次打开面板时清空。
+  const [openSubagents, setOpenSubagents] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleSubagents = useCallback((id: string) => {
+    setOpenSubagents((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
   const rootRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const suppressClick = useRef(false)
@@ -263,6 +273,7 @@ function IslandInner(props: IslandProps) {
     if (suppressClick.current) return
     // 有活动会话时历史会话默认收拢，没有时默认展开；以打开面板这一刻为准。
     setHistoryView({ open: historyOpenByDefault(classification.total), shown: HISTORY_PAGE })
+    setOpenSubagents(new Set())
     setExpanded(true)
   }
 
@@ -271,8 +282,14 @@ function IslandInner(props: IslandProps) {
     collapse()
   }
 
+  // 当前显示出来的子智能体列表及其行数，变化时面板高度需要过渡。
+  const subagentKey = classification.groups
+    .flatMap((g) => g.sessions)
+    .filter((s) => s.subagents.length > 0 && openSubagents.has(s.id))
+    .map((s) => `${s.id}:${s.subagents.length}`)
+    .join(',')
   // Layout animations run only when this key changes, so dragging never animates.
-  const layoutKey = `${expanded}|${view}|${pref.collapsedStyle}|${classification.counts.pending}|${classification.counts.completed}|${classification.counts.running}|${historyView.open}|${historyView.shown}`
+  const layoutKey = `${expanded}|${view}|${pref.collapsedStyle}|${classification.counts.pending}|${classification.counts.completed}|${classification.counts.running}|${historyView.open}|${historyView.shown}|${subagentKey}`
 
   return (
     <MotionConfig reducedMotion="user" transition={SPRING}>
@@ -317,6 +334,8 @@ function IslandInner(props: IslandProps) {
                     history={history}
                     historyView={historyView}
                     onHistoryView={setHistoryView}
+                    openSubagents={openSubagents}
+                    onToggleSubagents={toggleSubagents}
                     now={now}
                     prefs={prefs}
                     maxHeight={budget.height}
@@ -441,6 +460,8 @@ function Panel(props: {
   history: readonly HistorySession[]
   historyView: HistoryView
   onHistoryView: (view: HistoryView) => void
+  openSubagents: ReadonlySet<string>
+  onToggleSubagents: (id: string) => void
   now: number
   prefs: PrefsStore
   maxHeight: number
@@ -502,22 +523,57 @@ const ROW_VARIANTS = {
   show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
 } as const
 
-function detailOf(t: Translate, session: ActiveSession): string {
-  const parts: string[] = []
-  if (session.kind === 'pending') parts.push(t(`pending.${session.pendingKind ?? 'other'}`))
-  else if (session.kind === 'completed') parts.push(t('detail.completed'))
-  else parts.push(t('detail.running'))
-  if (session.runningSubagents > 0) parts.push(t('detail.subagents', { n: session.runningSubagents }))
-  if (session.current) parts.push(t('detail.current'))
-  return parts.join(' · ')
+/**
+ * 副标题中的状态说明。进行中不写文字（分组和转圈图标已经表达了），
+ * 待处理写具体类型，已完成写「未查看」。
+ */
+function statusTextOf(t: Translate, session: ActiveSession): string | undefined {
+  if (session.kind === 'pending') return t(`pending.${session.pendingKind ?? 'other'}`)
+  if (session.kind === 'completed') return t('detail.completed')
+  return undefined
 }
 
-function SessionList({ t, classification, history, historyView, onHistoryView, now, onOpen }: {
+/** 副标题：Workspace · 状态说明 · 子智能体徽标 · 当前会话，缺的项连同分隔点一起省略。 */
+function RowMeta({ t, session }: { t: Translate; session: ActiveSession }) {
+  const items: { key: string; node: ReactNode }[] = []
+  if (session.workspace !== undefined) items.push({ key: 'ws', node: <span className={css.rowWorkspace}>{session.workspace}</span> })
+  const status = statusTextOf(t, session)
+  if (status !== undefined) items.push({ key: 'status', node: <span className={css.rowDetail}>{status}</span> })
+  if (session.runningSubagents > 0) items.push({ key: 'sub', node: <SubagentBadge t={t} count={session.runningSubagents} /> })
+  if (session.current) items.push({ key: 'current', node: <span className={css.rowDetail}>{t('detail.current')}</span> })
+  if (items.length === 0) return null
+  return (
+    <span className={css.rowMeta}>
+      {items.map((item, i) => (
+        <Fragment key={item.key}>
+          {i > 0 && <span className={css.rowSep} aria-hidden="true">·</span>}
+          {item.node}
+        </Fragment>
+      ))}
+    </span>
+  )
+}
+
+/** 蓝色的智能体图标加数量，代替「N 个子智能体运行中」；悬停和读屏仍给出完整说法。 */
+function SubagentBadge({ t, count }: { t: Translate; count: number }) {
+  const label = t('subagent.running', { n: count })
+  return (
+    <span className={css.subBadge} title={label}>
+      <AgentIcon />
+      <span aria-hidden="true">{count}</span>
+      <span className={css.srOnly}>{label}</span>
+    </span>
+  )
+}
+
+function SessionList({ t, classification, history, historyView, onHistoryView, openSubagents, onToggleSubagents, now, onOpen }: {
   t: Translate
   classification: Classification
   history: readonly HistorySession[]
   historyView: HistoryView
   onHistoryView: (view: HistoryView) => void
+  openSubagents: ReadonlySet<string>
+  onToggleSubagents: (id: string) => void
   now: number
   onOpen: (session: { readonly id: string }) => void
 }) {
@@ -542,32 +598,15 @@ function SessionList({ t, classification, history, historyView, onHistoryView, n
             <span className={css.groupRule} />
           </m.div>
           {group.sessions.map((session) => (
-            <m.button
+            <ActiveRow
               key={session.id}
-              type="button"
-              variants={ROW_VARIANTS}
-              className={css.rowButton}
-              data-current={session.current || undefined}
-              data-kind={group.kind as StatusKind}
-              aria-label={t('aria.open', { title: session.title })}
-              onClick={() => onOpen(session)}
-            >
-              <span className={css.rowIcon}><StatusIcon kind={session.kind} size={14} /></span>
-              <span className={css.rowText}>
-                <span className={css.rowTitle}>{session.title}</span>
-                <span className={css.rowMeta}>
-                  {session.workspace !== undefined && (
-                    <>
-                      <span className={css.rowWorkspace}>{session.workspace}</span>
-                      <span className={css.rowSep} aria-hidden="true">·</span>
-                    </>
-                  )}
-                  <span className={css.rowDetail}>{detailOf(t, session)}</span>
-                </span>
-              </span>
-              <span className={css.rowTime}>{relative(t, session.updatedAt, now)}</span>
-              <span className={css.rowArrow}><ChevronIcon dir="right" /></span>
-            </m.button>
+              t={t}
+              session={session}
+              open={openSubagents.has(session.id)}
+              onToggle={onToggleSubagents}
+              now={now}
+              onOpen={onOpen}
+            />
           ))}
         </section>
       ))}
@@ -577,6 +616,110 @@ function SessionList({ t, classification, history, historyView, onHistoryView, n
       <div className={css.hint}>{t('hint')}</div>
     </m.div>
   )
+}
+
+/**
+ * 活动会话行。有正在运行的子智能体时，右侧显示展开按钮，展开后在行下方列出这些子智能体。
+ * 跳转按钮和展开按钮是并列的两个按钮（按钮不能嵌套）；展开按钮叠放在行的右端。
+ */
+function ActiveRow({ t, session, open, onToggle, now, onOpen }: {
+  t: Translate
+  session: ActiveSession
+  open: boolean
+  onToggle: (id: string) => void
+  now: number
+  onOpen: (session: { readonly id: string }) => void
+}) {
+  const hasSubagents = session.subagents.length > 0
+  const expanded = hasSubagents && open
+  const listId = `sf-subagents-${session.id}`
+  return (
+    <m.div variants={ROW_VARIANTS} className={css.sessionRow}>
+      <button
+        type="button"
+        className={css.rowButton}
+        data-current={session.current || undefined}
+        data-kind={session.kind}
+        data-toggle={hasSubagents || undefined}
+        aria-label={t('aria.open', { title: session.title })}
+        onClick={() => onOpen(session)}
+      >
+        <span className={css.rowIcon}><StatusIcon kind={session.kind} size={14} /></span>
+        <span className={css.rowText}>
+          <span className={css.rowTitle}>{session.title}</span>
+          <RowMeta t={t} session={session} />
+        </span>
+        <span className={css.rowTime}>{relative(t, session.updatedAt, now)}</span>
+      </button>
+      {hasSubagents && (
+        <button
+          type="button"
+          className={css.rowToggle}
+          aria-expanded={expanded}
+          aria-controls={expanded ? listId : undefined}
+          aria-label={expanded ? t('subagent.collapse') : t('subagent.expand', { n: session.subagents.length })}
+          title={expanded ? t('subagent.collapse') : t('subagent.expand', { n: session.subagents.length })}
+          onClick={() => onToggle(session.id)}
+        >
+          <span className={css.rowToggleChevron} data-open={expanded || undefined}><ChevronIcon dir="down" /></span>
+        </button>
+      )}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <m.div
+            key="subagents"
+            id={listId}
+            role="group"
+            aria-label={t('subagent.list', { title: session.title })}
+            className={css.subList}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto', transition: { duration: 0.2, ease: 'easeOut' } }}
+            exit={{ opacity: 0, height: 0, transition: { duration: 0.14, ease: 'easeIn' } }}
+          >
+            {session.subagents.map((sub) => <SubagentRow key={sub.id} t={t} subagent={sub} onOpen={onOpen} />)}
+          </m.div>
+        )}
+      </AnimatePresence>
+    </m.div>
+  )
+}
+
+/** 一个正在运行的子智能体：名称、任务、运行时长、token。点击跳转到子智能体会话。 */
+function SubagentRow({ t, subagent, onOpen }: {
+  t: Translate
+  subagent: RunningSubagent
+  onOpen: (session: { readonly id: string }) => void
+}) {
+  const hasMeta = subagent.task !== undefined || subagent.tokens !== undefined
+  return (
+    <button
+      type="button"
+      className={css.subRow}
+      aria-label={t('aria.openSubagent', { name: subagent.name })}
+      onClick={() => onOpen(subagent)}
+    >
+      <span className={css.subIcon}><StatusIcon kind="running" size={11} /></span>
+      <span className={css.rowText}>
+        <span className={css.subName} title={subagent.name}>{subagent.name}</span>
+        {hasMeta && (
+          <span className={css.subMeta}>
+            {subagent.task !== undefined && <span className={css.subTask} title={subagent.task}>{subagent.task}</span>}
+            {subagent.task !== undefined && subagent.tokens !== undefined && <span className={css.rowSep} aria-hidden="true">·</span>}
+            {subagent.tokens !== undefined && <span className={css.subTokens}>{formatTokens(t, subagent.tokens)}</span>}
+          </span>
+        )}
+      </span>
+      <LiveDuration t={t} subagent={subagent} />
+    </button>
+  )
+}
+
+/** 运行时长每秒刷新；计时器只在子智能体列表展开时存在，不会让整个面板每秒重渲染。 */
+function LiveDuration({ t, subagent }: { t: Translate; subagent: RunningSubagent }) {
+  const now = useNow(subagent.activeSince !== undefined, 1000)
+  const elapsed = subagentElapsed(subagent, now)
+  if (elapsed === undefined) return null
+  return <span className={css.subTime}>{formatDuration(t, elapsed)}</span>
 }
 
 /**
@@ -638,7 +781,6 @@ function HistorySection({ t, history, view, onView, now, onOpen }: {
                 )}
               </span>
               <span className={css.rowTime}>{relative(t, session.updatedAt, now)}</span>
-              <span className={css.rowArrow}><ChevronIcon dir="right" /></span>
             </m.button>
           ))}
           {more && (

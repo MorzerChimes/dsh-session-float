@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  badgeLabel, classify, historyOpenByDefault, HISTORY_LIMIT, nextHistoryCount, recentHistory, sameClassification, sameHistory,
-  type SessionListLike, type SessionRow, type SessionStatusLike,
+  badgeLabel, classify, historyOpenByDefault, HISTORY_LIMIT, markClipped, nextHistoryCount, recentHistory, runningSubagentsOf, sameClassification, sameHistory,
+  subagentElapsed, type SessionListLike, type SessionRow, type SessionStatusLike,
 } from '../src/client/classify.ts'
+import { formatDuration, formatTokens, wrapT } from '../src/client/locales.ts'
 
 function row(id: string, extra: Partial<SessionRow> = {}): SessionRow {
   return { id, displayTitle: `title-${id}`, blank: false, running: false, updatedAt: 0, ...extra }
@@ -39,6 +40,29 @@ describe('classify', () => {
     const result = classify(l, s, undefined)
     expect(result.total).toBe(1)
     expect(result.groups[0]?.sessions[0]?.pendingKind).toBe('question')
+  })
+
+  it('keeps a Session running while its subagents run, matching the sidebar', () => {
+    // 主会话本轮已结束（completionUnread），但子智能体还在运行：侧边栏显示进行中
+    const rows = [row('p'), row('c', { origin: 'subagent', running: true })]
+    const projections = { p: { values: { subagentCatalog: [{ id: 'c', mode: 'one-shot' }] } } }
+    const s = new Map([['p', status({ running: false, completionUnread: true })]])
+    const during = classify(list(rows, projections), s, undefined)
+    expect(during.counts).toEqual({ pending: 0, completed: 0, running: 1 })
+    expect(during.groups[0]?.sessions[0]).toMatchObject({ kind: 'running', runningSubagents: 1 })
+    expect(recentHistory(list(rows, projections), s, undefined)).toEqual([])
+
+    // 子智能体结束后，未查看的完成才显示为已完成
+    const after = new Map([...s, ['c', status({ running: false })]])
+    expect(classify(list(rows, projections), after, undefined).groups[0]?.sessions[0]).toMatchObject({ kind: 'completed', runningSubagents: 0 })
+
+    // 自身运行中优先于未读完成，与侧边栏一致
+    const self = new Map([['p', status({ running: true, completionUnread: true })]])
+    expect(classify(list([row('p')]), self, undefined).groups[0]?.sessions[0]).toMatchObject({ kind: 'running', runningSubagents: 0 })
+
+    // 待处理仍然最优先
+    const ask = new Map([...s, ['p', status({ pendingInteraction: { kind: 'approval' } })]])
+    expect(classify(list(rows, projections), ask, undefined).groups[0]?.kind).toBe('pending')
   })
 
   it('prefers the live status running flag over the list fallback', () => {
@@ -91,6 +115,106 @@ describe('classify', () => {
     expect(sameClassification(classify(l, new Map(), undefined), classify(l, new Map(), undefined))).toBe(true)
     const l2 = list([row('a', { running: true, displayTitle: 'renamed' })])
     expect(sameClassification(classify(l, new Map(), undefined), classify(l2, new Map(), undefined))).toBe(false)
+  })
+})
+
+describe('runningSubagentsOf', () => {
+  const usage = { uncachedInputTokens: 1000, outputTokens: 200, cacheReadTokens: 10_000, cacheWriteTokens: 300 }
+  const l = list(
+    [
+      row('p', { running: true }),
+      row('c1', { origin: 'subagent', running: true, displayTitle: 'fallback', projectionValues: { title: '查找调用方', subagentTiming: { settledMs: 5000, active: { since: 1000, through: 2000 } }, tokenUsage: usage } }),
+      row('c2', { origin: 'subagent', running: true, displayTitle: 'c2-title' }),
+      row('c3', { origin: 'subagent', running: false }),
+      row('c4', { origin: 'subagent', running: true, projectionValues: { title: '同名' } }),
+    ],
+    { p: { values: { subagentCatalog: [
+      { id: 'c1', mode: 'one-shot', label: '分析依赖' },
+      { id: 'c2', mode: 'one-shot' },
+      { id: 'c3', mode: 'continuable', label: '已结束' },
+      { id: 'ext', mode: 'external', label: '外部' },
+      { id: 'c4', mode: 'continuable', label: '同名' },
+    ] } } },
+  )
+
+  it('lists only running, non-external children in catalog order with name, task, timing and tokens', () => {
+    const subs = runningSubagentsOf(l, new Map(), 'p')
+    expect(subs.map((x) => x.id)).toEqual(['c1', 'c2', 'c4'])
+    expect(subs[0]).toEqual({ id: 'c1', name: '分析依赖', task: '查找调用方', settledMs: 5000, activeSince: 1000, tokens: 11_500 })
+    // 没有标签时名称取子会话标题，且不再重复显示为任务
+    expect(subs[1]).toEqual({ id: 'c2', name: 'c2-title' })
+    // 任务与名称相同时省略
+    expect(subs[2]).toEqual({ id: 'c4', name: '同名' })
+  })
+
+  it('prefers the live status over the list row', () => {
+    const s = new Map([['c1', status({ running: false })], ['c3', status({ running: true })]])
+    expect(runningSubagentsOf(l, s, 'p').map((x) => x.id)).toEqual(['c2', 'c3', 'c4'])
+  })
+
+  it('feeds classify and its structural comparison', () => {
+    const session = classify(l, new Map(), undefined).groups[0]!.sessions[0]!
+    expect(session.runningSubagents).toBe(3)
+    expect(session.subagents).toHaveLength(3)
+    const changed = list(
+      [row('p', { running: true }), row('c1', { origin: 'subagent', running: true, projectionValues: { tokenUsage: usage } })],
+      { p: { values: { subagentCatalog: [{ id: 'c1', label: 'a' }] } } },
+    )
+    const before = classify(changed, new Map(), undefined)
+    const moreTokens = list(
+      [row('p', { running: true }), row('c1', { origin: 'subagent', running: true, projectionValues: { tokenUsage: { ...usage, outputTokens: 999 } } })],
+      { p: { values: { subagentCatalog: [{ id: 'c1', label: 'a' }] } } },
+    )
+    expect(sameClassification(before, classify(changed, new Map(), undefined))).toBe(true)
+    expect(sameClassification(before, classify(moreTokens, new Map(), undefined))).toBe(false)
+  })
+
+  it('computes elapsed time from settled time plus the open turn', () => {
+    expect(subagentElapsed({ id: 'a', name: 'a' }, 10_000)).toBeUndefined()
+    expect(subagentElapsed({ id: 'a', name: 'a', settledMs: 3000 }, 10_000)).toBe(3000)
+    expect(subagentElapsed({ id: 'a', name: 'a', settledMs: 3000, activeSince: 4000 }, 10_000)).toBe(9000)
+    expect(subagentElapsed({ id: 'a', name: 'a', settledMs: 0, activeSince: 12_000 }, 10_000)).toBe(0)
+  })
+})
+
+describe('markClipped', () => {
+  it('appends an ellipsis to titles cut at the fallback limits', () => {
+    // 真实数据：首条提示被截到 39 字节，DSH 不加省略号
+    expect(markClipped('这是一个插件测试任务，请尽')).toBe('这是一个插件测试任务，请尽…')
+    // 英文提示截到 5 个词
+    expect(markClipped('please wait for ten minutes')).toBe('please wait for ten minutes…')
+  })
+  it('leaves short or already marked titles alone', () => {
+    expect(markClipped('测试：等待 10 分钟')).toBe('测试：等待 10 分钟')
+    expect(markClipped('查找所有调用方')).toBe('查找所有调用方')
+    expect(markClipped('fix the login bug')).toBe('fix the login bug')
+    expect(markClipped('已经截断…')).toBe('已经截断…')
+  })
+  it('also marks complete titles that happen to reach the limit (known false positive)', () => {
+    // 37 字节：与「截到 40 字节以内」无法区分
+    expect(markClipped('查找 classify.ts 的所有调用方')).toBe('查找 classify.ts 的所有调用方…')
+  })
+  it('is applied to subagent tasks', () => {
+    const l = list(
+      [row('p', { running: true }), row('c', { origin: 'subagent', running: true, projectionValues: { title: '这是一个插件测试任务，请尽' } })],
+      { p: { values: { subagentCatalog: [{ id: 'c', mode: 'continuable', label: '测试：等待 3 分钟' }] } } },
+    )
+    expect(runningSubagentsOf(l, new Map(), 'p')[0]?.task).toBe('这是一个插件测试任务，请尽…')
+  })
+})
+
+describe('subagent formatting', () => {
+  const t = wrapT(undefined)
+  it('formats durations', () => {
+    expect(formatDuration(t, 42_400)).toBe('42 秒')
+    expect(formatDuration(t, 125_000)).toBe('2 分 5 秒')
+    expect(formatDuration(t, 3_725_000)).toBe('1 小时 2 分')
+  })
+  it('formats token counts like the DSH subagent menu', () => {
+    expect(formatTokens(t, 999)).toBe('999 tok')
+    expect(formatTokens(t, 12_345)).toBe('12.3K tok')
+    expect(formatTokens(t, 123_456)).toBe('123K tok')
+    expect(formatTokens(t, 1_250_000)).toBe('1.3M tok')
   })
 })
 

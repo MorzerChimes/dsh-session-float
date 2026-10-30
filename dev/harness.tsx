@@ -7,6 +7,8 @@
  *   &open=1 (click the pill)  &settings=1 (open settings)  &page=1 (render the Plugins-page form)
  *   &only=1 (onlyInConversation)  &panel=plugins|schedules (mock active main panel)
  *   &history=N (idle Sessions shown under 历史会话, default 8)
+ *   &subagents=N (running subagents under the first running Session, default 3)
+ *   &parentDone=1 (that parent's own turn has ended; only its subagents still run)
  */
 import * as React from 'react'
 import * as jsx from 'react/jsx-runtime'
@@ -56,7 +58,36 @@ const historyCount = Number(q.get('history') ?? 8)
 for (let i = 0; i < historyCount; i++) {
   rows.push({ id: `h${i}`, displayTitle: idleTitles[i % idleTitles.length] + (i >= idleTitles.length ? ` ${i}` : ''), cwd: ['/home/u/dsh-session-float', '/home/u/my-api', '/srv/data-pipeline'][i % 3], blank: false, running: false, updatedAt: now - (i * 47 + 30) * 60_000, retainedBy: i === 0 && q.get('currentIdle') === '1' ? { mainView: 1 } : {} })
 }
-const list = { ids: rows.map((x) => x.id), byId: Object.fromEntries(rows.map((x) => [x.id, x])), projectionsBySession: {} }
+const list = { ids: rows.map((x) => x.id), byId: Object.fromEntries(rows.map((x) => [x.id, x])) as Record<string, any>, projectionsBySession: {} as Record<string, any> }
+// ?subagents=N：给第一个进行中的会话挂 N 个运行中的子智能体（外加 1 个已结束的，不应显示），默认 3
+const subCount = Number(q.get('subagents') ?? 3)
+const parent = rows.find((x) => x.running)
+if (parent !== undefined && subCount > 0) {
+  const labels = ['分析依赖关系', '检查测试覆盖率', '整理变更说明', '审查样式改动', '调研替代方案']
+  // 第一项是 DSH 兜底标题的真实样子：首条提示截到 40 字节以内，不带省略号
+  const tasks = ['这是一个插件测试任务，请尽', '统计未覆盖的分支', undefined, '核对暗色主题配色', '比较三种实现的复杂度']
+  const catalog: any[] = []
+  for (let i = 0; i <= subCount; i++) {
+    const id = `${parent.id}-sub${i}`
+    const running = i < subCount
+    catalog.push({ id, createdAt: now - i * 1000, mode: i % 2 === 0 ? 'one-shot' : 'continuable', ...(i === 2 ? {} : { label: labels[i % labels.length] }) })
+    list.byId[id] = {
+      id, displayTitle: tasks[i % tasks.length] ?? `子会话 ${i}`, origin: 'subagent', parentId: parent.id, blank: false, running, updatedAt: 0,
+      projectionValues: {
+        ...(tasks[i % tasks.length] === undefined ? {} : { title: tasks[i % tasks.length] }),
+        subagentTiming: { settledMs: i * 95_000, ...(running ? { active: { since: now - (i + 1) * 17_000, through: now } } : {}) },
+        ...(i === 1 ? {} : { tokenUsage: { uncachedInputTokens: 1200 * (i + 1), outputTokens: 800 * (i + 1), cacheReadTokens: 9000 * (i + 1) ** 2, cacheWriteTokens: 300 } }),
+      },
+    }
+    statuses.set(id, { running, pendingInteraction: undefined, completionUnread: false })
+  }
+  list.projectionsBySession[parent.id] = { values: { subagentCatalog: catalog }, state: 'idle', error: null }
+  // ?parentDone=1：父会话本轮已结束（未读完成），只剩子智能体在运行；应仍归入进行中
+  if (q.get('parentDone') === '1') {
+    parent.running = false
+    statuses.set(parent.id, { running: false, pendingInteraction: undefined, completionUnread: true })
+  }
+}
 const workspaces = { items: [{ title: 'dsh-session-float', sessionIds: ['s0', 's3'] }], archivedSessionIds: [] }
 const hook = (v: unknown) => (sel: (x: unknown) => unknown) => sel(v)
 

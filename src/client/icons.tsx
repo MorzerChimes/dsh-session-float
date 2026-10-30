@@ -99,6 +99,23 @@ export function GearIcon() {
   )
 }
 
+/**
+ * 智能体图标（小机器人：天线、圆角方形头部、两只眼睛），用于子智能体徽标。
+ * 12px，描边跟随 currentColor。墨迹上下对称地落在 y = 1..11，几何中心就是视觉中心，
+ * 与文字的对齐交给 CSS（见 .subBadge）。
+ */
+export function AgentIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg className={css.icon} width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M6 1.8v1.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <circle cx="6" cy="1.8" r="0.8" fill="currentColor" />
+      <rect x="1.6" y="4.2" width="8.8" height="6.2" rx="2.1" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="4.4" cy="7.3" r="0.95" fill="currentColor" />
+      <circle cx="7.6" cy="7.3" r="0.95" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function ChevronIcon({ dir }: { dir: 'up' | 'down' | 'left' | 'right' }) {
   const d = { up: 'M4 10l4-4 4 4', down: 'M4 6l4 4 4-4', left: 'M10 4l-4 4 4 4', right: 'M6 4l4 4-4 4' }[dir]
   return (
